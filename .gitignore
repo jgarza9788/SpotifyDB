@@ -179,3 +179,13 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+
+# Project-specific ignores
+cred.py
+spotify.duckdb
+spotify.duckdb.wal
+.env
+.vscode/
+.cache-spotifydb
+__pycache__/
