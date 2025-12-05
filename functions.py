@@ -229,6 +229,74 @@ def load_my_saved_tracks(sp, limit:int=50):
 #             })
 #     return pd.DataFrame(features_rows)
 
+def get_followed_artists_df(sp, limit=50):
+    """
+    Return all artists the user follows as a pandas DataFrame.
+    Order is not guaranteed (Spotify gives cursor-based pagination).
+
+    Example:
+    df_followed = get_followed_artists_df(sp)
+    df_followed.head()
+    """
+    all_artists = []
+    
+    # First page
+    data = sp.current_user_followed_artists(limit=limit)
+    artists = data["artists"]["items"]
+    all_artists.extend(artists)
+
+    # Cursor-based paging
+    cursor = data["artists"]["cursors"]["after"]
+
+    while cursor:
+        data = sp.current_user_followed_artists(limit=limit, after=cursor)
+        artists = data["artists"]["items"]
+        all_artists.extend(artists)
+
+        cursor = data["artists"]["cursors"]["after"]
+
+    # Convert to DataFrame
+    df = pd.DataFrame([
+        {
+            "artist_id": a["id"],
+            "name": a["name"],
+            "followers": a["followers"]["total"],
+            "popularity": a["popularity"],
+            "genres": ", ".join(a.get("genres", [])),
+            "uri": a["uri"]
+        }
+        for a in all_artists
+    ])
+
+    return df
+
+def get_artist_top_tracks_df(sp, artist_id, country="US"):
+    """
+    Return a DataFrame of an artist's most popular songs.
+    Spotify requires a country parameter (ISO 3166-1 alpha-2 code).
+    """
+    data = sp.artist_top_tracks(artist_id, country=country)
+    tracks = data.get("tracks", [])
+
+    rows = []
+
+    for t in tracks:
+        rows.append({
+            "track_id": t["id"],
+            "name": t["name"],
+            "album_name": t["album"]["name"],
+            "album_id": t["album"]["id"],
+            "artist_name": ", ".join(a["name"] for a in t["artists"]),
+            "artist_ids": ", ".join(a["id"] for a in t["artists"]),
+            "popularity": t["popularity"],
+            "duration_ms": t["duration_ms"],
+            "explicit": t["explicit"],
+            "preview_url": t["preview_url"],
+            "uri": t["uri"]
+        })
+
+    return pd.DataFrame(rows)
+
 def find_playlist_by_name(sp,name):
     playlists = []
     results = sp.current_user_playlists(limit=50)
@@ -377,6 +445,54 @@ def playlist_cleanup(sp, playlist_id, sort_by=None):
 
     return df
 
+
+def duckdb_table_age(con, table_name):
+    """
+    Return the age of a DuckDB table in days since last update.
+    If table does not exist or has never been updated, returns None.
+
+    Example:
+    age_seconds = duckdb_table_age(con, "my_table")
+    """
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS table_updated (
+    table_name TEXT PRIMARY KEY,
+    updated_at BIGINT
+    );
+    """)
+
+    result = con.execute("""
+        SELECT updated_at FROM table_updated
+        WHERE table_name = ?;
+    """, [table_name]).fetchone()
+
+    if result is None:
+        return None
+
+    updated_at = result[0]
+    current_time = con.execute("SELECT epoch(now());").fetchone()[0]
+
+    return (current_time - updated_at)/86400
+
+
+
+def duckdb_table_updated(con, table_name):
+
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS table_updated (
+    table_name TEXT PRIMARY KEY,
+    updated_at DOUBLE
+    );
+    """)
+
+    con.execute("""
+        INSERT INTO table_updated (table_name, updated_at)
+        VALUES (?, epoch(now()))
+        ON CONFLICT(table_name)
+            DO UPDATE SET updated_at = epoch(now());
+    """, [table_name])
+
+
 def df_to_duckdb(con, df, table_name):
     """
     Save a pandas DataFrame to DuckDB table.
@@ -387,6 +503,8 @@ def df_to_duckdb(con, df, table_name):
     """
     con.register("_temp_df", df)
     con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM _temp_df")
+
+    duckdb_table_updated(con, table_name)
 
 def duckdb_to_df(con, table_name):
     """
