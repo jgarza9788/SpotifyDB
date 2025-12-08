@@ -1,7 +1,36 @@
-
+import requests
 import pandas as pd
 
-def normalize_track_item(sp, track, source_type, source_id):
+
+def get_genre_tags(artist,track):
+    """
+    Given a Spotify artist and track object, return combined genre tags.
+    """
+
+    artist = artist.replace(" ","%20")
+    track = track.replace(" ","%20")
+    url = f"https://musicbrainz.org/ws/2/recording/?query=recording:\"{track}\"%20AND%20artist:\"{artist}\"&fmt=json#"
+    # print(url)
+    response = requests.get(url)
+    data = response.json()
+
+    genres = []
+    for recording in data.get("recordings", []):
+        for tag in recording.get("tags", []):
+            genre = tag.get("name")
+            if genre and genre not in genres:
+                genres.append(genre)
+
+
+    return ','.join(genres)
+
+if __name__ == "__main__":
+    print(get_genre_tags("Adele","Hello"))
+    exit()
+
+
+
+def normalize_track_item(track, source_type, source_id):
     """
     Convert a Spotify track object into a flat row suitable for DuckDB.
     Includes genres (via artists) and play_count placeholder.
@@ -9,28 +38,30 @@ def normalize_track_item(sp, track, source_type, source_id):
     # --------------------------
     # Construct normalized object
     # --------------------------
+
+    artist_name = ", ".join(a["name"] for a in track["artists"])
+    track_name = track["name"]
+
+    # genre_tags = get_genre_tags(artist_name,track_name)
+
     return {
-        "source_type": source_type,
-        "source_id": source_id,
+            "source_type": source_type,
+            "source_id": source_id,
+            "track_id": track["id"],
+            "name": track_name,
+            "album_name": track["album"]["name"],
+            "album_id": track["album"]["id"],
+            "artist_name": artist_name,
+            "artist_ids": ", ".join(a["id"] for a in track["artists"]),
+            "popularity": track["popularity"],
+            "duration_ms": track["duration_ms"],
+            "explicit": track["explicit"],
+            "preview_url": track["preview_url"],
+            "uri": track["uri"],
+            # "genres": genre_tags,  # Placeholder for genres
+        }
 
-        "track_id": track["id"],
-        "track_name": track["name"],
-
-        "album_name": track["album"]["name"] if track.get("album") else None,
-        "album_id": track["album"]["id"] if track.get("album") else None,
-
-        "artist_name": ", ".join(a["name"] for a in track["artists"]),
-        "artist_ids": ", ".join(a["id"] for a in track["artists"]),
-
-        "duration_ms": track.get("duration_ms"),
-        "explicit": track.get("explicit"),
-        "popularity": track.get("popularity"),
-        "disc_number": track.get("disc_number"),
-        "track_number": track.get("track_number"),
-        "uri": track.get("uri"),
-    }
-
-def load_tracks_from_playlist(sp, playlist_id, limit:int=100):
+def load_tracks_from_playlist(sp, playlist_id, limit:int=50):
     """
     Example:
     df = load_tracks_from_playlist(sp, "37i9dQZF1DXcBWIGoYBM5M")  # Today's Top Hits
@@ -47,9 +78,12 @@ def load_tracks_from_playlist(sp, playlist_id, limit:int=100):
             break
 
         for item in items:
-            track = item["track"]
-            if track and track["id"]:
-                tracks.append(normalize_track_item(track, "playlist", playlist_id))
+            _track = item["track"]
+            if _track and _track["id"]:
+                tracks.append(normalize_track_item(
+                    track=_track, 
+                    source_id="playlist", 
+                    source_type=playlist_id))
 
         offset += len(items)
 
@@ -179,6 +213,9 @@ def load_my_saved_tracks(sp, limit:int=50):
             
             # audio_features = get_audio_features(sp, track["id"])
 
+            # results.append(
+            #     normalize_track_item( track, "saved", "user")
+            # )
             results.append({
                 "saved_at": item["added_at"],
                 "track_id": track["id"],
@@ -198,6 +235,68 @@ def load_my_saved_tracks(sp, limit:int=50):
         offset += len(items)
 
     return pd.DataFrame(results)
+
+def load_my_top_tracks(sp, time_range="medium_term", limit=50):
+    """
+    Fetch the current user's top tracks.
+
+    Parameters
+    ----------
+    sp : spotipy.Spotify
+        An authenticated Spotipy client.
+    time_range : str, optional
+        One of 'short_term' (4 weeks), 'medium_term' (6 months), or 'long_term' (several years).
+    limit : int, optional
+        Number of top tracks to fetch (max 50).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per top track with useful metadata.
+    """
+    results = sp.current_user_top_tracks(time_range=time_range, limit=limit)
+    items = results.get("items", [])
+
+    rows = []
+
+    for track in items:
+        rows.append(
+            normalize_track_item(track, "top", time_range)
+        )
+
+    return pd.DataFrame(rows)
+
+
+def load_my_recently_played(sp, limit=50):
+    """
+    Fetch the current user's recently played tracks.
+
+    Parameters
+    ----------
+    sp : spotipy.Spotify
+        An authenticated Spotipy client.
+    limit : int, optional
+        Number of recently played tracks to fetch (max 50).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per recently played track with useful metadata.
+    """
+    results = sp.current_user_recently_played(limit=limit)
+    items = results.get("items", [])
+
+    rows = []
+
+    for item in items:
+        track = item["track"]
+        played_at = item["played_at"]
+        row = normalize_track_item(track, "recent", "user")
+        row["played_at"] = played_at
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
 
 # def audio_features_for_tracks(sp,track_ids, batch_size=10):
 #     """
