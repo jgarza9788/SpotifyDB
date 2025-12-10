@@ -267,7 +267,7 @@ def load_my_top_tracks(sp, time_range="medium_term", limit=50):
     return pd.DataFrame(rows)
 
 
-def load_my_recently_played(sp, limit=50):
+def load_my_recently_played(sp, limit=50, after=None,before=None):
     """
     Fetch the current user's recently played tracks.
 
@@ -283,7 +283,7 @@ def load_my_recently_played(sp, limit=50):
     pandas.DataFrame
         One row per recently played track with useful metadata.
     """
-    results = sp.current_user_recently_played(limit=limit)
+    results = sp.current_user_recently_played(limit=limit, after=after, before=before)
     items = results.get("items", [])
 
     rows = []
