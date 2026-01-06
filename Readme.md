@@ -12,11 +12,12 @@ A lightweight toolkit for pulling tracks from Spotify and shaping them into tidy
 - [Spotipy](https://spotipy.readthedocs.io/)
 - pandas
 - duckdb (optional, for persisting the resulting tables)
+- IPython
 
 Install dependencies with:
 
 ```bash
-pip install spotipy pandas duckdb
+pip install spotipy pandas duckdb IPython
 ```
 
 ## Authentication

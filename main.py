@@ -33,7 +33,7 @@ from cred import spotify_client_id, spotify_client_secret
 
 # ## import libraries
 
-# In[3]:
+# In[ ]:
 
 
 import os, time
@@ -47,6 +47,8 @@ from spotipy.oauth2 import SpotifyOAuth
 
 # custom functions
 import functions as fn
+
+from IPython.display import display
 
 
 # ## setting up the environment, api, and duckdb
@@ -95,10 +97,7 @@ con = duckdb.connect(database='spotify.duckdb')
 
 
 df_tables = con.execute(f"SHOW TABLES").df()
-try:
-    display(df_tables)
-except:
-    pass
+display(df_tables)
 
 
 # ## function wrapper 
@@ -152,11 +151,8 @@ def get_item(table_name:str,source_type:str, source_id:str,verbose=True):
         items = fn.duckdb_to_df(con, table_name)
 
     if verbose:
-        try:
-            display(f"{table_name}: {len(items)} records")
-            display(items.head())
-        except:
-            pass
+        display(f"{table_name}: {len(items)} records")
+        display(items.head())
 
     return items
 
@@ -187,11 +183,9 @@ else:
     followed_artist = fn.duckdb_to_df(con, "followed_artist")
     print("Loaded followed_artist table from DuckDB.")
 
-try:
-    display(f"Followed Artists: {len(followed_artist)} records")
-    display(followed_artist.head())
-except:
-    pass
+
+display(f"Followed Artists: {len(followed_artist)} records")
+display(followed_artist.head())
 
 
 # ### my liked songs
@@ -215,11 +209,10 @@ desc limit 100
 """
 ).to_df()
 
-try:
-    display(f"new_liked_songs: {len(new_liked_songs)}")
-    display(new_liked_songs.head())
-except:
-    pass
+
+display(f"new_liked_songs: {len(new_liked_songs)}")
+display(new_liked_songs.head())
+
 
 # let's save this as a Playlist on Spotify
 playlist_id = fn.create_playlist(
@@ -246,11 +239,9 @@ desc limit 100
 """
 ).to_df()
 
-try:
-    display(f"cream_of_crop: {len(cream_of_crop)}")
-    display(cream_of_crop.head())
-except:
-    pass
+
+display(f"cream_of_crop: {len(cream_of_crop)}")
+display(cream_of_crop.head())
 
 # let's save this as a Playlist on Spotify
 playlist_id = fn.create_playlist(
@@ -276,11 +267,10 @@ for artist_id in top_artist:
     artist_albums = fn.get_artist_top_tracks_df(sp, artist_id)
     disc_these = pd.concat([disc_these, artist_albums], ignore_index=True)
 
-try:
-    display(f"disc_these: {len(disc_these)}")
-    display(disc_these.head())
-except:
-    pass
+
+display(f"disc_these: {len(disc_these)}")
+display(disc_these.head())
+
 
 # let's save this as a Playlist on Spotify
 playlist_id = fn.create_playlist(
@@ -323,11 +313,8 @@ CoversPP = pd.concat(
 CoversPP = CoversPP.drop_duplicates()
 CoversPP = CoversPP.sort_values(by=['popularity'], ascending=False).reset_index(drop=True)
 
-try:
-    display(f"CoversPP: {len(CoversPP)}")
-    display(CoversPP.head())
-except:
-    pass
+display(f"CoversPP: {len(CoversPP)}")
+display(CoversPP.head())
 
 # save the playlist 
 playlist_id = fn.create_playlist(
@@ -437,12 +424,9 @@ limit 150
 """
 ).to_df()
 
-try:
-    display(f"forgotten_tracks: {len(forgotten_tracks)}")
-    display(forgotten_tracks.head())
-except:
-    pass
 
+display(f"forgotten_tracks: {len(forgotten_tracks)}")
+display(forgotten_tracks.head())
 
 # save the playlist 
 playlist_id = fn.create_playlist(
